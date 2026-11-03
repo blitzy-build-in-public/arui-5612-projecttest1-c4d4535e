@@ -20,9 +20,12 @@ const TEXT_CONTENT_TYPE = 'text/plain; charset=utf-8';
  * Send a complete plain-text response.
  *
  * `Content-Length` is set explicitly because Node performs no outbound length
- * check of its own and adds no `Content-Type` unless the handler sets one — the
- * handler is what keeps the response framed. It is `Buffer.byteLength(body)`
- * rather than `body.length` because HTTP counts bytes, not characters.
+ * check by default and adds no `Content-Type` unless the handler sets one, so a
+ * body that disagrees with the length it declares goes out unnoticed. Node
+ * computes the length itself only when the whole body reaches a single
+ * `res.end(...)` before the header block is sent, and this helper sends the
+ * headers first with `writeHead`. It is `Buffer.byteLength(body)` rather than
+ * `body.length` because HTTP counts bytes, not characters.
  *
  * The body is written by the single `res.end(...)` call below, which both sends
  * it and ends the response, so no caller can write after the response has ended.
@@ -112,12 +115,15 @@ function refuseConnect(socket) {
   // `'error'` on the socket, and an unhandled `'error'` event ends the process.
   socket.on('error', () => socket.destroy());
 
+  // `ServerResponse` is what adds the `Date` header to every other response, and
+  // these bytes go to the socket directly, so the refusal sends its own.
   const body = 'Method Not Allowed';
   const response =
     'HTTP/1.1 405 Method Not Allowed\r\n' +
     'Allow: GET, HEAD\r\n' +
     `Content-Type: ${TEXT_CONTENT_TYPE}\r\n` +
     `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+    `Date: ${new Date().toUTCString()}\r\n` +
     'Connection: close\r\n' +
     '\r\n' +
     body;
