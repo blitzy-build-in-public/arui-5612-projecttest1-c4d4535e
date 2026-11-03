@@ -8,8 +8,8 @@
  *
  * Run it and it prints exactly one line:
  * `Listening on http://127.0.0.1:3000 — GET /hello returns "Hello world"`.
- * A start it cannot complete prints exactly one line on standard error and
- * exits with code 1, so those two messages are all this process logs.
+ * A failure prints exactly one line on standard error and exits with code 1,
+ * so those two messages are all this process logs.
  */
 import { isIPv6 } from 'node:net';
 
@@ -33,8 +33,18 @@ const rawPort = process.env.PORT;
 const portNotGiven = rawPort === undefined || rawPort.trim() === '';
 const port = portNotGiven ? 3000 : Number(rawPort);
 
+// Set once the bind has completed, because the failure sentence names the phase
+// the server was in: an `'error'` after this point comes from a server that was
+// serving — a failing `accept(2)` reaches the same listener — and that server
+// stopped rather than failed to start.
+let listening = false;
+
 /**
- * Report a start failure on stderr and stop the process with exit code 1.
+ * Report a failure on stderr and stop the process with exit code 1.
+ *
+ * The sentence names the phase: before the bind the server could not start, and
+ * an `'error'` after it can only come from a server that was already running, so
+ * there the server stopped.
  *
  * Every failure goes through this one message, which is what keeps this
  * process's logging at exactly two messages: this line on stderr and the
@@ -43,8 +53,10 @@ const port = portNotGiven ? 3000 : Number(rawPort);
  *
  * @param {string} reason What went wrong, as a phrase the message completes.
  */
-function failToStart(reason) {
-  console.error(`The server could not start: ${reason}`);
+function fail(reason) {
+  const phase = listening ? 'The server stopped' : 'The server could not start';
+
+  console.error(`${phase}: ${reason}`);
   process.exit(1);
 }
 
@@ -58,7 +70,7 @@ function failToStart(reason) {
 const portIsValid = portNotGiven || (/^\d+$/.test(rawPort) && port <= 65535);
 
 if (!portIsValid) {
-  failToStart(`PORT "${rawPort}" is not an integer between 0 and 65535`);
+  fail(`PORT "${rawPort}" must be plain decimal digits between 0 and 65535`);
 }
 
 const server = createServer();
@@ -67,7 +79,7 @@ const server = createServer();
 // Listening for it turns a taken port or an unusable address into a sentence a
 // reader can act on.
 server.on('error', (error) => {
-  failToStart(
+  fail(
     error.code === 'EADDRINUSE'
       ? `port ${port} on ${host} is already in use. Choose another one with PORT=<port> npm start.`
       : error.message,
@@ -75,6 +87,8 @@ server.on('error', (error) => {
 });
 
 server.listen(port, host, () => {
+  listening = true;
+
   // The port the operating system actually bound, which is the one to call:
   // with `PORT=0` the kernel picks a free port and this line reveals it.
   const boundPort = server.address().port;
