@@ -1,4 +1,6 @@
-# An optional npm install writes node_modules here; this project declares no dependencies.
+# No dependencies are declared, so an optional npm install fetches nothing and writes only the
+# generated package-lock.json, which this repository does not carry; node_modules/ stays for a dependency added later.
 node_modules/
 npm-debug.log*
+package-lock.json
 .DS_Store

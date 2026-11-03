@@ -153,4 +153,4 @@ The route check is the `if (pathname !== '/hello')` line in `app.js`: add the ne
 - `server.js` — the process entry point `npm start` runs: `HOST` and `PORT`, `listen`, the startup line, and the failure and shutdown handling.
 - `package.json` — the manifest: ESM (`"type": "module"`), the Node.js floor (`"engines": { "node": ">=22" }`), and the `start` and `test` scripts. It declares no dependencies.
 - `test/hello.test.js` — the behavioural test suite, found by `node --test` with no configuration.
-- `.gitignore` — keeps `node_modules/`, npm debug logs and `.DS_Store` out of the tree.
+- `.gitignore` — keeps `node_modules/`, the generated `package-lock.json`, npm debug logs and `.DS_Store` out of the tree.
