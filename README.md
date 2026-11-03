@@ -98,6 +98,8 @@ curl -si -X POST http://127.0.0.1:3000/hello | grep -iE '^(HTTP|allow)'
 # Allow: GET, HEAD
 ```
 
+`CONNECT` is the one method Node.js never hands to the request listener: it is delivered to the server's connection-level event instead, and a server that listens for nothing there closes the socket without answering the client at all. This app opens no tunnel, so it answers `CONNECT` with that same `405`, the same `Allow: GET, HEAD` header and the same `Method Not Allowed` body, and then closes the connection. Because that answer never passes through the request listener, the test suite checks it over a raw socket rather than through `fetch`.
+
 `HEAD /hello` returns the same status and the same headers as `GET`, with no body — Node.js itself suppresses the body of a `HEAD` response, so the handler has no branch for it:
 
 ```bash
@@ -125,9 +127,9 @@ That runs `node --test`, which finds the single test file `test/hello.test.js` w
 1. `GET /hello` answers `200` with `Content-Type` exactly `text/plain; charset=utf-8`, `Content-Length` `11`, and a body strictly equal to `Hello world` — asserted over real HTTP, not by reading the code.
 2. `GET /hello?name=Ada` answers `200` and the same body, which is what proves the query string is ignored.
 3. A parsed path that is not `/hello` answers `404`, asserted for both `/nope` and `/hello/`.
-4. `POST /hello` answers `405` with `Allow: GET, HEAD`.
+4. `POST /hello` answers `405` with `Allow: GET, HEAD`; the same case also sends `CONNECT` over a raw socket, to check that the refusal covers the one method Node.js answers below the request listener.
 
-The tests listen on port `0` bound to `127.0.0.1`, so the operating system hands them a free port and the suite can never collide with a server you already have running. They call the server through the global `fetch`, so no HTTP client package is needed, and they start and close their own server, so you do not have to stop `npm start` before running them.
+The tests listen on port `0` bound to `127.0.0.1`, so the operating system hands them a free port and the suite can never collide with a server you already have running. They call the server through the global `fetch`, and case 4 opens one raw `node:net` socket for the `CONNECT` reply, so no HTTP client package is needed, and they start and close their own server, so you do not have to stop `npm start` before running them.
 
 ## How it works
 

@@ -90,20 +90,22 @@ server.listen(port, host, () => {
 let shuttingDown = false;
 
 // Ctrl-C and `kill` are the normal ways to stop a server, and both should be a
-// quiet exit rather than a stack trace. The guard makes a second signal a no-op,
-// so neither can close the server twice or leave the shell waiting on it.
+// quiet exit rather than a stack trace. `shuttingDown` keeps a repeat signal
+// from running `close` twice, and the repeat signal ends the process at once:
+// pressing Ctrl-C again is declining to wait for the requests still in flight.
+// That is still a stop the reader asked for, so it exits with code 0 as well.
 function shutdown() {
   if (shuttingDown) {
-    return;
+    process.exit(0);
   }
 
   shuttingDown = true;
 
-  // Closing stops accepting connections; dropping idle sockets as well means a
-  // client holding a keep-alive connection open cannot delay the exit. The
-  // process leaves with code 0 once the server has closed.
+  // `close` stops accepting new connections and releases the keep-alive sockets
+  // sitting idle between requests; a connection still being served, or whose
+  // request has not arrived in full, is waited for until it ends. The process
+  // leaves with code 0 once the server has closed.
   server.close(() => process.exit(0));
-  server.closeIdleConnections();
 }
 
 process.on('SIGINT', shutdown);

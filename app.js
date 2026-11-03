@@ -44,21 +44,35 @@ function sendText(res, status, body, extraHeaders = {}) {
 }
 
 /**
+ * Parse a request target down to its path, or report that it cannot be parsed.
+ *
+ * Parsing before routing is a safety net rather than a response to ordinary
+ * malformed input: Node's own request parser rejects a malformed request line
+ * before the listener ever runs, so the only targets that reach this function
+ * and fail are absolute-form or protocol-relative ones with an empty host, such
+ * as `http://` or `//`.
+ *
+ * @param {string} target The raw request target, `req.url`.
+ * @returns {string | null} The path, or `null` when the target cannot be parsed.
+ */
+function parsePathname(target) {
+  try {
+    return new URL(target, 'http://localhost').pathname;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Answer one HTTP request. Every branch below ends the response exactly once.
  *
  * @param {import('node:http').IncomingMessage} req The incoming request.
  * @param {import('node:http').ServerResponse} res The response to complete.
  */
 function handleRequest(req, res) {
-  // Parse the request target before routing it. This is a safety net rather
-  // than a response to ordinary malformed input: Node's own request parser
-  // rejects a malformed request line before the listener ever runs, so the only
-  // targets that get here and fail to parse are absolute-form or
-  // protocol-relative ones with an empty host, such as `http://` or `//`.
-  let pathname;
-  try {
-    pathname = new URL(req.url, 'http://localhost').pathname;
-  } catch {
+  const pathname = parsePathname(req.url);
+
+  if (pathname === null) {
     sendText(res, 400, 'Bad Request');
     return;
   }
@@ -83,7 +97,39 @@ function handleRequest(req, res) {
 }
 
 /**
- * Create the application's HTTP server with its request listener attached.
+ * Refuse a `CONNECT` request.
+ *
+ * Node never hands `CONNECT` to the request listener: the server raises this
+ * connection-level event instead, and a server listening for nothing there
+ * closes the socket without answering the client at all. This endpoint opens no
+ * tunnel, so every `CONNECT` is refused with the same `405` and the same
+ * `Allow` header as any other unsupported method, and the connection is closed.
+ *
+ * @param {import('node:net').Socket} socket The connection the request arrived on.
+ */
+function refuseConnect(socket) {
+  // A peer that resets the connection while the refusal is on its way emits
+  // `'error'` on the socket, and an unhandled `'error'` event ends the process.
+  socket.on('error', () => socket.destroy());
+
+  const body = 'Method Not Allowed';
+  const response =
+    'HTTP/1.1 405 Method Not Allowed\r\n' +
+    'Allow: GET, HEAD\r\n' +
+    `Content-Type: ${TEXT_CONTENT_TYPE}\r\n` +
+    `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+    'Connection: close\r\n' +
+    '\r\n' +
+    body;
+
+  // `end` flushes the refusal and then closes the connection; `destroy` on its
+  // own can drop a response the client has not read yet.
+  socket.end(response);
+}
+
+/**
+ * Create the application's HTTP server with its request listener and its
+ * `CONNECT` refusal attached.
  *
  * Importing this module opens no socket and leaves no handle open, so the
  * caller decides where and whether to listen: the returned server is not
@@ -92,5 +138,11 @@ function handleRequest(req, res) {
  * @returns {import('node:http').Server} A configured, not-yet-listening server.
  */
 export function createServer() {
-  return createHttpServer(handleRequest);
+  const server = createHttpServer(handleRequest);
+
+  // `CONNECT` arrives at the connection layer rather than at the request
+  // listener, so its refusal is attached to the server next to that listener.
+  server.on('connect', (_req, socket) => refuseConnect(socket));
+
+  return server;
 }
