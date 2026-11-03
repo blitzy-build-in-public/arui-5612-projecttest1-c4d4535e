@@ -8,7 +8,11 @@
  *
  * Run it and it prints exactly one line:
  * `Listening on http://127.0.0.1:3000 — GET /hello returns "Hello world"`.
+ * A start it cannot complete prints exactly one line on standard error and
+ * exits with code 1, so those two messages are all this process logs.
  */
+import { isIPv6 } from 'node:net';
+
 import { createServer } from './app.js';
 
 /**
@@ -29,6 +33,21 @@ const rawPort = process.env.PORT;
 const portNotGiven = rawPort === undefined || rawPort.trim() === '';
 const port = portNotGiven ? 3000 : Number(rawPort);
 
+/**
+ * Report a start failure on stderr and stop the process with exit code 1.
+ *
+ * Every failure goes through this one message, which is what keeps this
+ * process's logging at exactly two messages: this line on stderr and the
+ * startup line on stdout. It is also what stops `PORT=abc` from reaching
+ * `listen` as a RangeError stack trace.
+ *
+ * @param {string} reason What went wrong, as a phrase the message completes.
+ */
+function failToStart(reason) {
+  console.error(`The server could not start: ${reason}`);
+  process.exit(1);
+}
+
 // `PORT` is accepted only as plain decimal digits. Left to `Number`, `1e3`
 // would become port 1000, `0x10` the privileged port 16, and a padded value
 // would be trimmed to a number nobody wrote; a non-numeric value such as
@@ -38,8 +57,7 @@ const port = portNotGiven ? 3000 : Number(rawPort);
 const portIsValid = portNotGiven || (/^\d+$/.test(rawPort) && port <= 65535);
 
 if (!portIsValid) {
-  console.error(`Invalid PORT "${rawPort}": use an integer between 0 and 65535.`);
-  process.exit(1);
+  failToStart(`PORT "${rawPort}" is not an integer between 0 and 65535`);
 }
 
 const server = createServer();
@@ -48,15 +66,11 @@ const server = createServer();
 // Listening for it turns a taken port or an unusable address into a sentence a
 // reader can act on.
 server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(
-      `Port ${port} on ${host} is already in use. Choose another one with PORT=<port> npm start.`,
-    );
-  } else {
-    console.error(`The server could not start: ${error.message}`);
-  }
-
-  process.exit(1);
+  failToStart(
+    error.code === 'EADDRINUSE'
+      ? `port ${port} on ${host} is already in use. Choose another one with PORT=<port> npm start.`
+      : error.message,
+  );
 });
 
 server.listen(port, host, () => {
@@ -64,9 +78,13 @@ server.listen(port, host, () => {
   // with `PORT=0` the kernel picks a free port and this line reveals it.
   const boundPort = server.address().port;
 
+  // An IPv6 host has to be bracketed inside a URL: `HOST=::1` binds correctly
+  // but would otherwise print the unusable `http://::1:3000`.
+  const shownHost = isIPv6(host) ? `[${host}]` : host;
+
   // The one startup line. `README.md` quotes it, so its wording and its em dash
   // are part of what the tutorial publishes.
-  console.log(`Listening on http://${host}:${boundPort} — GET /hello returns "Hello world"`);
+  console.log(`Listening on http://${shownHost}:${boundPort} — GET /hello returns "Hello world"`);
 });
 
 let shuttingDown = false;
