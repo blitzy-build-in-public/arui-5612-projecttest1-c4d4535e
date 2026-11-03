@@ -79,9 +79,16 @@ server.listen(port, host, () => {
   // with `PORT=0` the kernel picks a free port and this line reveals it.
   const boundPort = server.address().port;
 
-  // An IPv6 host has to be bracketed inside a URL: `HOST=::1` binds correctly
-  // but would otherwise print the unusable `http://::1:3000`.
-  const shownHost = isIPv6(host) ? `[${host}]` : host;
+  // The address the operating system actually bound, which is the one to name
+  // here: `HOST=0` and a host name are both resolved by the system before the
+  // bind, so the `HOST` text that was asked for is not always an address the
+  // server ended up on.
+  const boundAddress = server.address().address;
+
+  // An IPv6 address has to be bracketed inside a URL: bound to `::1` the server
+  // is reachable, but the unbracketed `http://::1:3000` is not a URL a client
+  // can use.
+  const shownHost = isIPv6(boundAddress) ? `[${boundAddress}]` : boundAddress;
 
   // The one startup line. `README.md` quotes it, so its wording and its em dash
   // are part of what the tutorial publishes.

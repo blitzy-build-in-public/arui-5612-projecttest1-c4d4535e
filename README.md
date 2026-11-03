@@ -41,7 +41,7 @@ HOST=0.0.0.0 PORT=8080 npm start    # also reachable from your network
 PORT=0 npm start                    # let the OS pick a free port; the startup line prints the one it chose
 ```
 
-`HOST` takes a host name or an IP address, and a name is resolved by your system: `HOST=localhost` binds whichever loopback address `localhost` resolves to — the IPv6 loopback `::1` on many systems — so a client must reach the server by that same name. An IP literal such as `127.0.0.1` binds exactly that address and removes the ambiguity.
+`HOST` takes a host name or an IP address, and a name is resolved by your system: `HOST=localhost` binds whichever loopback address `localhost` resolves to — the IPv6 loopback `::1` on many systems — so a client must reach the server by that same name. An IP literal such as `127.0.0.1` binds exactly that address and removes the ambiguity. Keep `HOST` on a loopback address (`127.0.0.1`, or `localhost`) unless you intend the server to be reachable from elsewhere: `HOST=0` is not "no host" — the system resolves it to `0.0.0.0`, which binds every interface — and the startup line prints the address that was actually bound, so it is the line that tells you where the server really is.
 
 Stop the server with Ctrl-C: it closes the listener and exits with status `0`, not a stack trace. If the port you asked for is already taken, it prints a sentence on standard error naming `PORT` and exits with status `1`; if `PORT` is not a usable port number, it says so and exits `1` as well.
 
