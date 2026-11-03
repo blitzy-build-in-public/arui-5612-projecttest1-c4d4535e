@@ -15,6 +15,8 @@ node -v
 
 The project uses only Stability 2 APIs from the Node.js standard library, so it runs unchanged on the 22, 24 and 26 LTS lines. `npm` ships with Node.js and is used for the two commands below.
 
+Every command in this file is written for a bash-like shell — `bash` or `zsh` on Linux or macOS — because the byte-exactness check below uses process substitution and the boundary checks write to `/dev/null`, neither of which a POSIX `sh` or a Windows shell such as `cmd.exe` or PowerShell provides.
+
 ## Install
 
 There is nothing to install. The project declares no dependencies, so it runs from the Node.js runtime alone. `npm install` is optional: run from the project root it fetches no packages and writes only `package-lock.json`.
@@ -38,6 +40,8 @@ PORT=8080 npm start                 # http://127.0.0.1:8080/hello
 HOST=0.0.0.0 PORT=8080 npm start    # also reachable from your network
 PORT=0 npm start                    # let the OS pick a free port; the startup line prints the one it chose
 ```
+
+`HOST` takes a host name or an IP address, and a name is resolved by your system: `HOST=localhost` binds whichever loopback address `localhost` resolves to — the IPv6 loopback `::1` on many systems — so a client must reach the server by that same name. An IP literal such as `127.0.0.1` binds exactly that address and removes the ambiguity.
 
 Stop the server with Ctrl-C: it closes the listener and exits with status `0`, not a stack trace. If the port you asked for is already taken, it prints a sentence on standard error naming `PORT` and exits with status `1`; if `PORT` is not a usable port number, it says so and exits `1` as well.
 
@@ -78,7 +82,7 @@ curl -s http://127.0.0.1:3000/hello | cmp - <(printf 'Hello world')
 
 ### The endpoint boundary
 
-The path is matched exactly, so `/hello` is the only target that is served: `/`, `/hello/` and `/nope` are all different targets and all answer `404`.
+The match is on the parsed path, so that path must be exactly `/hello`: `/`, `/hello/` and `/nope` are all different paths and all answer `404`, and the trailing slash makes a different path rather than another spelling of the same one. Parsing a URL normalises dot-segments, so a target such as `/./hello` or `/foo/../hello` parses to `/hello` and reaches the same branch.
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/nope      # 404
@@ -106,7 +110,9 @@ A query string changes nothing, because the route is chosen from the parsed path
 curl -i 'http://127.0.0.1:3000/hello?name=Ada'    # same 200, same headers, same body
 ```
 
-Each of those error responses is plain text (`Content-Type: text/plain; charset=utf-8`) with a byte-accurate `Content-Length` and a short body — `Not Found` for the `404`, `Method Not Allowed` for the `405` — so no request is ever left waiting for a response that does not come.
+One more status comes from the request target rather than from the path: a target that cannot be parsed as a URL at all is answered `400` with the body `Bad Request`. Node.js's own parser rejects a malformed request line before the listener runs, so the only targets that reach this branch are absolute-form or protocol-relative ones with an empty host, such as `GET http://` — and the protocol-relative kind is one `curl` sends itself: `curl -i http://127.0.0.1:3000//` sends the empty-host target `GET // HTTP/1.1` and answers `400 Bad Request`.
+
+Each of those error responses is plain text (`Content-Type: text/plain; charset=utf-8`) with a byte-accurate `Content-Length` and a short body — `Not Found` for the `404`, `Method Not Allowed` for the `405` and `Bad Request` for the `400` — so no request is ever left waiting for a response that does not come.
 
 ## Run the tests
 
@@ -118,14 +124,14 @@ That runs `node --test`, which finds the single test file `test/hello.test.js` w
 
 1. `GET /hello` answers `200` with `Content-Type` exactly `text/plain; charset=utf-8`, `Content-Length` `11`, and a body strictly equal to `Hello world` — asserted over real HTTP, not by reading the code.
 2. `GET /hello?name=Ada` answers `200` and the same body, which is what proves the query string is ignored.
-3. A target that is not exactly `/hello` answers `404`, asserted for both `/nope` and `/hello/`.
+3. A parsed path that is not `/hello` answers `404`, asserted for both `/nope` and `/hello/`.
 4. `POST /hello` answers `405` with `Allow: GET, HEAD`.
 
 The tests listen on port `0` bound to `127.0.0.1`, so the operating system hands them a free port and the suite can never collide with a server you already have running. They call the server through the global `fetch`, so no HTTP client package is needed, and they start and close their own server, so you do not have to stop `npm start` before running them.
 
 ## How it works
 
-A request travels this path:
+A client opens a TCP connection to the bound host and port, Node.js accepts it, and the request then travels this path:
 
 1. `server.js` reads `HOST` and `PORT`, builds the server by calling `createServer()` from `app.js`, and listens with `server.listen(port, host, ...)`. Once the process is listening it prints the single startup line.
 2. Node.js parses the request line and the headers and emits a `'request'` event with `(req, res)`, which reaches `handleRequest` in `app.js`.
