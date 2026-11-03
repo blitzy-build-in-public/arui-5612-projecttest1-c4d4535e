@@ -19,8 +19,10 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
-after(() => {
-  server.close();
+after(async () => {
+  // `close` is asynchronous too: wait for the listener to release its port
+  // so the run's exit rests on teardown rather than on the client sockets.
+  await new Promise((resolve) => server.close(resolve));
 });
 
 test('GET /hello answers 200 with the exact plain-text contract', async () => {
