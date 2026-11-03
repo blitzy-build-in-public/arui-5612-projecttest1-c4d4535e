@@ -13,21 +13,32 @@ import { createServer } from './app.js';
 
 /**
  * The bind address, loopback by default: a tutorial server should not be
- * reachable from the network unless its reader asks for that with `HOST`.
+ * reachable from the network unless its reader asks for that with `HOST`. An
+ * empty value — `HOST=`, or a launcher passing a variable that was never set —
+ * means the same as leaving `HOST` out, because Node reads a falsy host as "no
+ * host given" and binds every interface instead of loopback.
  */
-const host = process.env.HOST ?? '127.0.0.1';
+const host = process.env.HOST?.trim() || '127.0.0.1';
 
 /**
- * The documented port, overridable with `PORT`. An environment variable always
- * arrives as a string, so it is converted to a number — passed through as
- * `'3000'`, `listen` would read it as a pipe name rather than a TCP port.
+ * The documented port, overridable with `PORT`. The value is read once, so the
+ * number below and the sentence it can produce cannot disagree. An empty or
+ * whitespace-only value means the same as leaving `PORT` out.
  */
-const port = Number(process.env.PORT ?? 3000);
+const rawPort = process.env.PORT;
+const portNotGiven = rawPort === undefined || rawPort.trim() === '';
+const port = portNotGiven ? 3000 : Number(rawPort);
 
-// A `PORT` that is not a usable port number would otherwise make `listen` throw
-// a RangeError stack trace, which is the failure mode this file exists to avoid.
-if (!Number.isInteger(port) || port < 0 || port > 65535) {
-  console.error(`Invalid PORT "${process.env.PORT}": use an integer between 0 and 65535.`);
+// `PORT` is accepted only as plain decimal digits. Left to `Number`, `1e3`
+// would become port 1000, `0x10` the privileged port 16, and a padded value
+// would be trimmed to a number nobody wrote; a non-numeric value such as
+// `PORT=abc` is the case `listen` would read as a pipe name rather than a TCP
+// port, and one out of range would make `listen` throw a RangeError stack trace
+// — the failure mode this file exists to turn into a sentence.
+const portIsValid = portNotGiven || (/^\d+$/.test(rawPort) && port <= 65535);
+
+if (!portIsValid) {
+  console.error(`Invalid PORT "${rawPort}": use an integer between 0 and 65535.`);
   process.exit(1);
 }
 
