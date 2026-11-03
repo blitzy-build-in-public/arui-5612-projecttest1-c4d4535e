@@ -15,7 +15,7 @@ node -v
 
 The project uses only Stability 2 APIs from the Node.js standard library, so it runs unchanged on the 22, 24 and 26 LTS lines. `npm` ships with Node.js and is used for the two commands below.
 
-Every command in this file is written for a bash-like shell — `bash` or `zsh` on Linux or macOS — because the byte-exactness check below uses process substitution and the boundary checks write to `/dev/null`, neither of which a POSIX `sh` or a Windows shell such as `cmd.exe` or PowerShell provides.
+Every command in this file is written for a bash-like shell — `bash` or `zsh` on Linux or macOS — because the byte-exactness check below uses process substitution, which a POSIX `sh` does not provide, and a Windows shell such as `cmd.exe` or PowerShell provides neither process substitution nor `/dev/null` redirection.
 
 ## Install
 
