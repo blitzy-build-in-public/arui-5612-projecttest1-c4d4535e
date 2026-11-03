@@ -1,0 +1,4 @@
+# An optional npm install writes node_modules here; this project declares no dependencies.
+node_modules/
+npm-debug.log*
+.DS_Store
