@@ -49,11 +49,12 @@ function failToStart(reason) {
 }
 
 // `PORT` is accepted only as plain decimal digits. Left to `Number`, `1e3`
-// would become port 1000, `0x10` the privileged port 16, and a padded value
-// would be trimmed to a number nobody wrote; a non-numeric value such as
-// `PORT=abc` is the case `listen` would read as a pipe name rather than a TCP
-// port, and one out of range would make `listen` throw a RangeError stack trace
-// — the failure mode this file exists to turn into a sentence.
+// would become port 1000, `0x10` the privileged port 16, which is why this
+// digits-only test is here. It asks for no more than digits, so a padded
+// value such as `0080` is accepted and binds port 80. A non-numeric value
+// such as `PORT=abc` would reach `listen` as `NaN`, which rejects it with a
+// RangeError, and one out of range would be rejected the same way — the
+// failure mode this file exists to turn into a sentence.
 const portIsValid = portNotGiven || (/^\d+$/.test(rawPort) && port <= 65535);
 
 if (!portIsValid) {
